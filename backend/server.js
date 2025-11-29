@@ -43,40 +43,60 @@ function calculateSpread(orderbook) {
   };
 }
 
-// Get active markets from Gamma API
+// Get active markets from CLOB API
 app.get('/api/markets', async (req, res) => {
   try {
-    const { filter, limit = 100 } = req.query;
+    const { filter, limit = 50 } = req.query;
 
-    let url = `${GAMMA_API}/markets`;
+    // Use CLOB API to get markets with token data
+    let url = `${CLOB_API}/markets`;
     const params = new URLSearchParams();
 
-    // Use closed parameter instead of active
+    // Apply filters
     if (filter === 'active') {
       params.append('closed', 'false');
+      params.append('active', 'true');
     } else if (filter === 'closed') {
       params.append('closed', 'true');
     }
-    // If filter is 'all', don't add any filter parameter
-
-    params.append('limit', limit);
 
     const fullUrl = `${url}?${params.toString()}`;
 
     const response = await fetch(fullUrl);
 
     if (!response.ok) {
-      throw new Error(`Gamma API error: ${response.status}`);
+      throw new Error(`CLOB API error: ${response.status}`);
     }
 
-    let markets = await response.json();
+    const result = await response.json();
+    let markets = result.data || result;
+
+    // Filter to only include markets with order books enabled
+    markets = markets.filter(m => m.enable_order_book !== false && m.tokens && m.tokens.length > 0);
+
+    // Take only the requested limit
+    markets = markets.slice(0, parseInt(limit));
 
     // Sort markets by end date (most recent first)
     markets = markets.sort((a, b) => {
-      const dateA = new Date(a.endDate || a.end_date_iso || 0);
-      const dateB = new Date(b.endDate || b.end_date_iso || 0);
+      const dateA = new Date(a.end_date_iso || a.endDate || 0);
+      const dateB = new Date(b.end_date_iso || b.endDate || 0);
       return dateB - dateA;
     });
+
+    // Format for frontend compatibility
+    markets = markets.map(m => ({
+      condition_id: m.condition_id,
+      question: m.question,
+      description: m.description,
+      end_date_iso: m.end_date_iso,
+      volume: m.volume || '0',
+      liquidity: m.liquidity || '0',
+      active: m.active,
+      closed: m.closed,
+      tokens: m.tokens,
+      enable_order_book: m.enable_order_book
+    }));
 
     res.json(markets);
   } catch (error) {
