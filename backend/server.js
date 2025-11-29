@@ -36,6 +36,11 @@ function calculateSpread(orderbookYes, orderbookNo = null) {
   const bestBidYes = parseFloat(orderbookYes.bids[0].price);
   const bestAskYes = parseFloat(orderbookYes.asks[0].price);
 
+  console.log(`calculateSpread called: orderbookNo=${orderbookNo ? 'PROVIDED' : 'NULL'}`);
+  if (orderbookNo) {
+    console.log(`orderbookNo has bids: ${orderbookNo.bids ? orderbookNo.bids.length : 'NO'}, asks: ${orderbookNo.asks ? orderbookNo.asks.length : 'NO'}`);
+  }
+
   let bestBid, bestAsk, bidSize, askSize;
 
   // If we have both orderbooks, calculate the effective spread
