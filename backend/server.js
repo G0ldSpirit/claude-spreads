@@ -200,72 +200,69 @@ app.post('/api/orderbooks', async (req, res) => {
       return res.status(400).json({ error: 'markets must be an array' });
     }
 
-    // For each market, fetch orderbooks for all tokens and calculate spread
-    const orderbooks = await Promise.all(
-      markets.map(async (market) => {
-        try {
-          if (!market.tokens || market.tokens.length === 0) {
-            return {};
-          }
+    // Process markets sequentially with delays to avoid rate limiting
+    const allOrderbooks = {};
 
-          // Fetch orderbooks for all tokens in the market
-          const tokenOrderbooks = await Promise.all(
-            market.tokens.map(async (token) => {
-              try {
-                const url = `${CLOB_API}/book?token_id=${token.token_id}`;
-                const response = await fetch(url);
+    for (let i = 0; i < markets.length; i++) {
+      const market = markets[i];
 
-                if (!response.ok) {
-                  return null;
-                }
-
-                const orderbook = await response.json();
-                return { outcome: token.outcome, token_id: token.token_id, orderbook };
-              } catch (error) {
-                console.error(`Error fetching orderbook for token ${token.token_id}:`, error);
-                return null;
-              }
-            })
-          );
-
-          // Filter out failed fetches
-          const validOrderbooks = tokenOrderbooks.filter(ob => ob !== null);
-
-          // Build result object with orderbooks for each token
-          const result = {};
-
-          // Find Yes and No orderbooks for spread calculation
-          const yesOb = validOrderbooks.find(ob => ob.outcome === 'Yes');
-          const noOb = validOrderbooks.find(ob => ob.outcome === 'No');
-
-          // For each token, add its orderbook with calculated spread
-          validOrderbooks.forEach(ob => {
-            const spreadMetrics = ob.outcome === 'Yes' && yesOb && noOb ?
-              calculateSpread(yesOb.orderbook, noOb.orderbook) :
-              ob.outcome === 'No' && yesOb && noOb ?
-              // For No token, invert the spread calculation
-              calculateSpread(noOb.orderbook, yesOb.orderbook) :
-              // Fallback to single orderbook calculation
-              calculateSpread(ob.orderbook);
-
-            result[ob.token_id] = {
-              ...ob.orderbook,
-              spreadMetrics
-            };
-          });
-
-          return result;
-        } catch (error) {
-          console.error(`Error processing market ${market.condition_id}:`, error);
-          return {};
+      try {
+        if (!market.tokens || market.tokens.length === 0) {
+          continue;
         }
-      })
-    );
 
-    // Flatten the results into a single object
-    const flatOrderbooks = Object.assign({}, ...orderbooks);
+        // Fetch orderbooks for all tokens sequentially
+        const tokenOrderbooks = [];
 
-    res.json(flatOrderbooks);
+        for (const token of market.tokens) {
+          try {
+            const url = `${CLOB_API}/book?token_id=${token.token_id}`;
+            const response = await fetch(url);
+
+            if (response.ok) {
+              const orderbook = await response.json();
+              tokenOrderbooks.push({ outcome: token.outcome, token_id: token.token_id, orderbook });
+            }
+
+            // Small delay between token requests
+            await delay(150);
+          } catch (error) {
+            console.error(`Error fetching orderbook for token ${token.token_id}:`, error);
+          }
+        }
+
+        // Find Yes and No orderbooks for spread calculation
+        const yesOb = tokenOrderbooks.find(ob => ob.outcome === 'Yes');
+        const noOb = tokenOrderbooks.find(ob => ob.outcome === 'No');
+
+        console.log(`Market ${market.condition_id}: ${yesOb ? 'Yes' : 'No Yes'}, ${noOb ? 'No' : 'No No'}`);
+
+        // For each token, add its orderbook with calculated spread
+        tokenOrderbooks.forEach(ob => {
+          const spreadMetrics = ob.outcome === 'Yes' && yesOb && noOb ?
+            calculateSpread(yesOb.orderbook, noOb.orderbook) :
+            ob.outcome === 'No' && yesOb && noOb ?
+            // For No token, invert the spread calculation
+            calculateSpread(noOb.orderbook, yesOb.orderbook) :
+            // Fallback to single orderbook calculation
+            calculateSpread(ob.orderbook);
+
+          allOrderbooks[ob.token_id] = {
+            ...ob.orderbook,
+            spreadMetrics
+          };
+        });
+
+        // Delay between markets to avoid rate limiting
+        if (i < markets.length - 1) {
+          await delay(200);
+        }
+      } catch (error) {
+        console.error(`Error processing market ${market.condition_id}:`, error);
+      }
+    }
+
+    res.json(allOrderbooks);
   } catch (error) {
     console.error('Error fetching orderbooks:', error);
     res.status(500).json({ error: error.message });
