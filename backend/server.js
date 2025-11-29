@@ -48,16 +48,23 @@ app.get('/api/markets', async (req, res) => {
   try {
     const { filter, limit = 50 } = req.query;
 
-    // Use CLOB API to get markets with token data
-    let url = `${CLOB_API}/markets`;
-    const params = new URLSearchParams();
+    let url, params;
 
-    // Apply filters
     if (filter === 'active') {
-      params.append('closed', 'false');
+      // Use simplified-markets endpoint for active markets with order books
+      url = `${CLOB_API}/sampling-simplified-markets`;
+      params = new URLSearchParams();
       params.append('active', 'true');
-    } else if (filter === 'closed') {
-      params.append('closed', 'true');
+      params.append('closed', 'false');
+      params.append('limit', limit);
+    } else {
+      // Use regular markets endpoint for closed/all markets
+      url = `${CLOB_API}/markets`;
+      params = new URLSearchParams();
+
+      if (filter === 'closed') {
+        params.append('closed', 'true');
+      }
     }
 
     const fullUrl = `${url}?${params.toString()}`;
@@ -71,34 +78,45 @@ app.get('/api/markets', async (req, res) => {
     const result = await response.json();
     let markets = result.data || result;
 
-    // Filter to only include markets with order books enabled
-    markets = markets.filter(m => m.enable_order_book !== false && m.tokens && m.tokens.length > 0);
+    // Ensure we have valid markets with tokens
+    markets = markets.filter(m => m.tokens && m.tokens.length > 0);
 
     // Take only the requested limit
     markets = markets.slice(0, parseInt(limit));
 
-    // Sort markets by end date (most recent first)
-    markets = markets.sort((a, b) => {
-      const dateA = new Date(a.end_date_iso || a.endDate || 0);
-      const dateB = new Date(b.end_date_iso || b.endDate || 0);
-      return dateB - dateA;
-    });
+    // Enrich markets with additional data from CLOB markets endpoint if needed
+    const enrichedMarkets = await Promise.all(
+      markets.map(async (m) => {
+        // If market doesn't have full details, try to fetch them
+        if (!m.question && m.condition_id) {
+          try {
+            const detailResponse = await fetch(`${CLOB_API}/markets/${m.condition_id}`);
+            if (detailResponse.ok) {
+              const details = await detailResponse.json();
+              return { ...m, ...details };
+            }
+          } catch (err) {
+            console.error(`Error fetching details for ${m.condition_id}:`, err);
+          }
+        }
+        return m;
+      })
+    );
 
     // Format for frontend compatibility
-    markets = markets.map(m => ({
+    const formattedMarkets = enrichedMarkets.map(m => ({
       condition_id: m.condition_id,
-      question: m.question,
-      description: m.description,
+      question: m.question || 'Unknown Market',
+      description: m.description || '',
       end_date_iso: m.end_date_iso,
       volume: m.volume || '0',
       liquidity: m.liquidity || '0',
-      active: m.active,
-      closed: m.closed,
-      tokens: m.tokens,
-      enable_order_book: m.enable_order_book
+      active: m.active !== undefined ? m.active : true,
+      closed: m.closed !== undefined ? m.closed : false,
+      tokens: m.tokens
     }));
 
-    res.json(markets);
+    res.json(formattedMarkets);
   } catch (error) {
     console.error('Error fetching markets:', error);
     res.status(500).json({ error: error.message });
