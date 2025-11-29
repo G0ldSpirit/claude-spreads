@@ -45,13 +45,19 @@ function calculateSpread(orderbookYes, orderbookNo = null) {
     const bestBidNo = parseFloat(orderbookNo.bids[0].price);
     const bestAskNo = parseFloat(orderbookNo.asks[0].price);
 
+    console.log(`RAW PRICES: Yes bid=${bestBidYes}, ask=${bestAskYes} | No bid=${bestBidNo}, ask=${bestAskNo}`);
+
     // Effective best bid for Yes = max(direct bid Yes, 1 - ask No)
     // Effective best ask for Yes = min(direct ask Yes, 1 - bid No)
     const effectiveBidFromNo = 1 - bestAskNo;
     const effectiveAskFromNo = 1 - bestBidNo;
 
+    console.log(`EFFECTIVE FROM NO: bid=${effectiveBidFromNo.toFixed(4)}, ask=${effectiveAskFromNo.toFixed(4)}`);
+
     bestBid = Math.max(bestBidYes, effectiveBidFromNo);
     bestAsk = Math.min(bestAskYes, effectiveAskFromNo);
+
+    console.log(`FINAL: bestBid=${bestBid.toFixed(4)}, bestAsk=${bestAsk.toFixed(4)}, spread=${(bestAsk - bestBid).toFixed(4)}`);
 
     // Use size from the source that provides the best price
     bidSize = bestBid === bestBidYes ?
