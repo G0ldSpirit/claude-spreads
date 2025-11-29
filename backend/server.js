@@ -13,7 +13,11 @@ const GAMMA_API = 'https://gamma-api.polymarket.com';
 const CLOB_API = 'https://clob.polymarket.com';
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+// Helper function to add delay between requests
+const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 // Helper function to calculate spread metrics for binary markets
 // For Polymarket binary markets, we need to consider both Yes and No tokens

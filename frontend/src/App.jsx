@@ -20,7 +20,7 @@ function App() {
 
       // Send filter as a single parameter
       params.append('filter', filter);
-      params.append('limit', '100');
+      params.append('limit', '20');
 
       const response = await fetch(`${API_BASE}/markets?${params.toString()}`);
       const data = await response.json();
