@@ -232,6 +232,7 @@ app.post('/api/orderbooks', async (req, res) => {
 
             if (response.ok) {
               const orderbook = await response.json();
+              console.log(`Token ${token.outcome} - Best bid: ${orderbook.bids?.[0]?.price}, Best ask: ${orderbook.asks?.[0]?.price}`);
               tokenOrderbooks.push({ outcome: token.outcome, token_id: token.token_id, orderbook });
             }
 
