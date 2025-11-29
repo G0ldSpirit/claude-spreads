@@ -59,8 +59,8 @@ function OrderBookModal({ market, orderbooks, onClose }) {
                 <span className="value">{formatPrice(spreadMetrics.spread)}</span>
               </div>
               <div className="spread-item">
-                <span className="label">Spread %:</span>
-                <span className="value percentage">{spreadMetrics.spreadPercentage}%</span>
+                <span className="label">Mid Price:</span>
+                <span className="value mid-price">{formatPrice((spreadMetrics.bestBid + spreadMetrics.bestAsk) / 2)}</span>
               </div>
             </div>
           )}

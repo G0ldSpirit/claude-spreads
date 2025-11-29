@@ -98,9 +98,9 @@ function MarketCard({ market, orderbooks, onClick }) {
               </span>
             </div>
             <div className="spread-metric">
-              <span className="spread-label">Spread %</span>
-              <span className="spread-value percentage">
-                {spreadData.spreadPercentage}%
+              <span className="spread-label">Mid Price</span>
+              <span className="spread-value mid-price">
+                {formatPrice((spreadData.bestBid + spreadData.bestAsk) / 2)}
               </span>
             </div>
           </div>

@@ -127,8 +127,8 @@
   font-size: 1.1rem;
 }
 
-.spread-item .value.percentage {
-  color: #f59e0b;
+.spread-item .value.mid-price {
+  color: #8b5cf6;
 }
 
 .orderbook-tables {
