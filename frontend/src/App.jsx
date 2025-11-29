@@ -29,28 +29,14 @@ function App() {
 
       // Fetch orderbooks for all markets
       if (data.length > 0) {
-        const tokenIds = data.flatMap(market =>
-          market.tokens?.map(token => token.token_id) || []
-        ).filter(Boolean);
+        const orderbookResponse = await fetch(`${API_BASE}/orderbooks`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ markets: data })
+        });
 
-        if (tokenIds.length > 0) {
-          const orderbookResponse = await fetch(`${API_BASE}/orderbooks`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ tokenIds })
-          });
-
-          const orderbookData = await orderbookResponse.json();
-
-          const orderbookMap = {};
-          orderbookData.forEach(ob => {
-            if (ob.tokenId) {
-              orderbookMap[ob.tokenId] = ob;
-            }
-          });
-
-          setOrderbooks(orderbookMap);
-        }
+        const orderbookData = await orderbookResponse.json();
+        setOrderbooks(orderbookData);
       }
 
       setLoading(false);
