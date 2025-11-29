@@ -46,13 +46,19 @@ function calculateSpread(orderbook) {
 // Get active markets from Gamma API
 app.get('/api/markets', async (req, res) => {
   try {
-    const { active, closed, limit = 50 } = req.query;
+    const { filter, limit = 100 } = req.query;
 
     let url = `${GAMMA_API}/markets`;
     const params = new URLSearchParams();
 
-    if (active !== undefined) params.append('active', active);
-    if (closed !== undefined) params.append('closed', closed);
+    // Use closed parameter instead of active
+    if (filter === 'active') {
+      params.append('closed', 'false');
+    } else if (filter === 'closed') {
+      params.append('closed', 'true');
+    }
+    // If filter is 'all', don't add any filter parameter
+
     params.append('limit', limit);
 
     const fullUrl = `${url}?${params.toString()}`;
@@ -63,7 +69,15 @@ app.get('/api/markets', async (req, res) => {
       throw new Error(`Gamma API error: ${response.status}`);
     }
 
-    const markets = await response.json();
+    let markets = await response.json();
+
+    // Sort markets by end date (most recent first)
+    markets = markets.sort((a, b) => {
+      const dateA = new Date(a.endDate || a.end_date_iso || 0);
+      const dateB = new Date(b.endDate || b.end_date_iso || 0);
+      return dateB - dateA;
+    });
+
     res.json(markets);
   } catch (error) {
     console.error('Error fetching markets:', error);

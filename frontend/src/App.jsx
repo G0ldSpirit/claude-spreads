@@ -18,13 +18,9 @@ function App() {
     try {
       const params = new URLSearchParams();
 
-      if (filter === 'active') {
-        params.append('active', 'true');
-      } else if (filter === 'closed') {
-        params.append('closed', 'true');
-      }
-
-      params.append('limit', '50');
+      // Send filter as a single parameter
+      params.append('filter', filter);
+      params.append('limit', '100');
 
       const response = await fetch(`${API_BASE}/markets?${params.toString()}`);
       const data = await response.json();
