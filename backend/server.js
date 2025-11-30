@@ -179,22 +179,33 @@ app.get('/api/markets', async (req, res) => {
 app.get('/api/orderbook/:tokenId', async (req, res) => {
   try {
     const { tokenId } = req.params;
-    const url = `${CLOB_API}/book?token_id=${tokenId}`;
 
-    const response = await fetch(url);
+    // Fetch best bid and ask using /price endpoint
+    const bidResponse = await fetch(`${CLOB_API}/price?token_id=${tokenId}&side=SELL`);
+    const askResponse = await fetch(`${CLOB_API}/price?token_id=${tokenId}&side=BUY`);
 
-    if (!response.ok) {
-      throw new Error(`CLOB API error: ${response.status}`);
+    if (!bidResponse.ok || !askResponse.ok) {
+      throw new Error(`CLOB API error: ${bidResponse.status || askResponse.status}`);
     }
 
-    const orderbook = await response.json();
+    const bidData = await bidResponse.json();
+    const askData = await askResponse.json();
 
-    // Calculate spread metrics
-    const spreadMetrics = calculateSpread(orderbook);
+    const bestBid = parseFloat(bidData.price);
+    const bestAsk = parseFloat(askData.price);
+    const spread = bestAsk - bestBid;
+    const midPrice = (bestBid + bestAsk) / 2;
+    const spreadPercentage = midPrice > 0 ? (spread / midPrice) * 100 : 0;
 
     res.json({
-      ...orderbook,
-      spreadMetrics
+      bids: [{ price: bestBid.toString(), size: "0" }],
+      asks: [{ price: bestAsk.toString(), size: "0" }],
+      spreadMetrics: {
+        bestBid: parseFloat(bestBid.toFixed(4)),
+        bestAsk: parseFloat(bestAsk.toFixed(4)),
+        spread: parseFloat(spread.toFixed(4)),
+        spreadPercentage: parseFloat(spreadPercentage.toFixed(2))
+      }
     });
   } catch (error) {
     console.error('Error fetching orderbook:', error);
@@ -222,48 +233,43 @@ app.post('/api/orderbooks', async (req, res) => {
           continue;
         }
 
-        // Fetch orderbooks for all tokens sequentially
-        const tokenOrderbooks = [];
-
+        // Fetch prices for all tokens using the /price endpoint
         for (const token of market.tokens) {
           try {
-            const url = `${CLOB_API}/book?token_id=${token.token_id}`;
-            const response = await fetch(url);
+            // Fetch best bid (price when selling)
+            const bidResponse = await fetch(`${CLOB_API}/price?token_id=${token.token_id}&side=SELL`);
+            const askResponse = await fetch(`${CLOB_API}/price?token_id=${token.token_id}&side=BUY`);
 
-            if (response.ok) {
-              const orderbook = await response.json();
-              console.log(`Token ${token.outcome} - Best bid: ${orderbook.bids?.[0]?.price}, Best ask: ${orderbook.asks?.[0]?.price}`);
-              tokenOrderbooks.push({ outcome: token.outcome, token_id: token.token_id, orderbook });
+            if (bidResponse.ok && askResponse.ok) {
+              const bidData = await bidResponse.json();
+              const askData = await askResponse.json();
+
+              const bestBid = parseFloat(bidData.price);
+              const bestAsk = parseFloat(askData.price);
+              const spread = bestAsk - bestBid;
+              const midPrice = (bestBid + bestAsk) / 2;
+              const spreadPercentage = midPrice > 0 ? (spread / midPrice) * 100 : 0;
+
+              console.log(`Token ${token.outcome} - Bid: ${bestBid}, Ask: ${bestAsk}, Spread: ${spread.toFixed(4)}`);
+
+              allOrderbooks[token.token_id] = {
+                bids: [{ price: bestBid.toString(), size: "0" }],
+                asks: [{ price: bestAsk.toString(), size: "0" }],
+                spreadMetrics: {
+                  bestBid: parseFloat(bestBid.toFixed(4)),
+                  bestAsk: parseFloat(bestAsk.toFixed(4)),
+                  spread: parseFloat(spread.toFixed(4)),
+                  spreadPercentage: parseFloat(spreadPercentage.toFixed(2))
+                }
+              };
             }
 
             // Small delay between token requests
-            await delay(150);
+            await delay(100);
           } catch (error) {
-            console.error(`Error fetching orderbook for token ${token.token_id}:`, error);
+            console.error(`Error fetching prices for token ${token.token_id}:`, error);
           }
         }
-
-        // Find Yes and No orderbooks for spread calculation
-        const yesOb = tokenOrderbooks.find(ob => ob.outcome === 'Yes');
-        const noOb = tokenOrderbooks.find(ob => ob.outcome === 'No');
-
-        console.log(`Market ${market.condition_id}: ${yesOb ? 'Yes' : 'No Yes'}, ${noOb ? 'No' : 'No No'}`);
-
-        // For each token, add its orderbook with calculated spread
-        tokenOrderbooks.forEach(ob => {
-          const spreadMetrics = ob.outcome === 'Yes' && yesOb && noOb ?
-            calculateSpread(yesOb.orderbook, noOb.orderbook) :
-            ob.outcome === 'No' && yesOb && noOb ?
-            // For No token, invert the spread calculation
-            calculateSpread(noOb.orderbook, yesOb.orderbook) :
-            // Fallback to single orderbook calculation
-            calculateSpread(ob.orderbook);
-
-          allOrderbooks[ob.token_id] = {
-            ...ob.orderbook,
-            spreadMetrics
-          };
-        });
 
         // Delay between markets to avoid rate limiting
         if (i < markets.length - 1) {
