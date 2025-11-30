@@ -201,13 +201,22 @@ app.get('/api/orderbook/:tokenId', async (req, res) => {
     const midPrice = (bestBid + bestAsk) / 2;
     const spreadPercentage = midPrice > 0 ? (spread / midPrice) * 100 : 0;
 
+    // Find sizes from orderbook that match the best bid/ask prices
+    const bidEntry = orderbook.bids?.find(b => Math.abs(parseFloat(b.price) - bestBid) < 0.0001);
+    const askEntry = orderbook.asks?.find(a => Math.abs(parseFloat(a.price) - bestAsk) < 0.0001);
+
+    const bidSize = bidEntry ? parseFloat(bidEntry.size) : 0;
+    const askSize = askEntry ? parseFloat(askEntry.size) : 0;
+
     res.json({
       ...orderbook,
       spreadMetrics: {
         bestBid: parseFloat(bestBid.toFixed(4)),
         bestAsk: parseFloat(bestAsk.toFixed(4)),
         spread: parseFloat(spread.toFixed(4)),
-        spreadPercentage: parseFloat(spreadPercentage.toFixed(2))
+        spreadPercentage: parseFloat(spreadPercentage.toFixed(2)),
+        bidSize: parseFloat(bidSize.toFixed(2)),
+        askSize: parseFloat(askSize.toFixed(2))
       }
     });
   } catch (error) {
@@ -257,6 +266,13 @@ app.post('/api/orderbooks', async (req, res) => {
               const midPrice = (bestBid + bestAsk) / 2;
               const spreadPercentage = midPrice > 0 ? (spread / midPrice) * 100 : 0;
 
+              // Find sizes from orderbook that match the best bid/ask prices
+              const bidEntry = orderbook.bids?.find(b => Math.abs(parseFloat(b.price) - bestBid) < 0.0001);
+              const askEntry = orderbook.asks?.find(a => Math.abs(parseFloat(a.price) - bestAsk) < 0.0001);
+
+              const bidSize = bidEntry ? parseFloat(bidEntry.size) : 0;
+              const askSize = askEntry ? parseFloat(askEntry.size) : 0;
+
               console.log(`Token ${token.outcome} - Bid: ${bestBid}, Ask: ${bestAsk}, Spread: ${spread.toFixed(4)}`);
 
               allOrderbooks[token.token_id] = {
@@ -265,7 +281,9 @@ app.post('/api/orderbooks', async (req, res) => {
                   bestBid: parseFloat(bestBid.toFixed(4)),
                   bestAsk: parseFloat(bestAsk.toFixed(4)),
                   spread: parseFloat(spread.toFixed(4)),
-                  spreadPercentage: parseFloat(spreadPercentage.toFixed(2))
+                  spreadPercentage: parseFloat(spreadPercentage.toFixed(2)),
+                  bidSize: parseFloat(bidSize.toFixed(2)),
+                  askSize: parseFloat(askSize.toFixed(2))
                 }
               };
             }
