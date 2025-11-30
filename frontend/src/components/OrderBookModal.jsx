@@ -27,7 +27,8 @@ function OrderBookModal({ market, orderbooks, onClose }) {
   }, [onClose]);
 
   const formatPrice = (price) => {
-    return `$${parseFloat(price).toFixed(4)}`;
+    const cents = (parseFloat(price) * 100).toFixed(1);
+    return `${cents}¢`;
   };
 
   const formatSize = (size) => {

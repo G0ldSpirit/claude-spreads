@@ -12,7 +12,8 @@ function MarketCard({ market, orderbooks, onClick }) {
 
   const formatPrice = (price) => {
     if (price === null || price === undefined) return 'N/A';
-    return `$${price.toFixed(4)}`;
+    const cents = (price * 100).toFixed(1);
+    return `${cents}¢`;
   };
 
   const getMarketStatus = () => {

@@ -13,6 +13,7 @@ function App() {
   const [selectedMarket, setSelectedMarket] = useState(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [lastUpdate, setLastUpdate] = useState(null);
+  const [sortBySpread, setSortBySpread] = useState(false);
 
   const fetchMarkets = async () => {
     try {
@@ -68,6 +69,25 @@ function App() {
     setSelectedMarket(null);
   };
 
+  const getSpreadForMarket = (market) => {
+    if (!market.tokens || market.tokens.length === 0) return 0;
+    const yesToken = market.tokens.find(t => t.outcome === 'Yes') || market.tokens[0];
+    const orderbook = orderbooks[yesToken.token_id];
+    return orderbook?.spreadMetrics?.spread || 0;
+  };
+
+  const getSortedMarkets = () => {
+    if (!sortBySpread) return markets;
+
+    return [...markets].sort((a, b) => {
+      const spreadA = getSpreadForMarket(a);
+      const spreadB = getSpreadForMarket(b);
+      return spreadB - spreadA; // Sort descending (highest spread first)
+    });
+  };
+
+  const displayedMarkets = getSortedMarkets();
+
   return (
     <div className="app">
       <header className="header">
@@ -94,24 +114,34 @@ function App() {
       </header>
 
       <div className="filters">
-        <button
-          className={`filter-button ${filter === 'all' ? 'active' : ''}`}
-          onClick={() => setFilter('all')}
-        >
-          All Markets
-        </button>
-        <button
-          className={`filter-button ${filter === 'active' ? 'active' : ''}`}
-          onClick={() => setFilter('active')}
-        >
-          Active
-        </button>
-        <button
-          className={`filter-button ${filter === 'closed' ? 'active' : ''}`}
-          onClick={() => setFilter('closed')}
-        >
-          Closed
-        </button>
+        <div className="filter-group">
+          <button
+            className={`filter-button ${filter === 'all' ? 'active' : ''}`}
+            onClick={() => setFilter('all')}
+          >
+            All Markets
+          </button>
+          <button
+            className={`filter-button ${filter === 'active' ? 'active' : ''}`}
+            onClick={() => setFilter('active')}
+          >
+            Active
+          </button>
+          <button
+            className={`filter-button ${filter === 'closed' ? 'active' : ''}`}
+            onClick={() => setFilter('closed')}
+          >
+            Closed
+          </button>
+        </div>
+        <div className="sort-group">
+          <button
+            className={`filter-button ${sortBySpread ? 'active' : ''}`}
+            onClick={() => setSortBySpread(!sortBySpread)}
+          >
+            {sortBySpread ? '📊 Sorted by Spread' : '📊 Sort by Spread'}
+          </button>
+        </div>
       </div>
 
       {loading ? (
@@ -121,7 +151,7 @@ function App() {
         </div>
       ) : (
         <div className="markets-grid">
-          {markets.map((market) => (
+          {displayedMarkets.map((market) => (
             <MarketCard
               key={market.condition_id}
               market={market}
