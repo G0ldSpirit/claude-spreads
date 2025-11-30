@@ -181,18 +181,21 @@ app.get('/api/orderbook/:tokenId', async (req, res) => {
     const { tokenId } = req.params;
 
     // Fetch best bid and ask using /price endpoint
-    const bidResponse = await fetch(`${CLOB_API}/price?token_id=${tokenId}&side=SELL`);
-    const askResponse = await fetch(`${CLOB_API}/price?token_id=${tokenId}&side=BUY`);
+    // Note: Polymarket API semantics:
+    // - side=BUY returns the best bid (price buyers are willing to pay)
+    // - side=SELL returns the best ask (price sellers are asking for)
+    const buyResponse = await fetch(`${CLOB_API}/price?token_id=${tokenId}&side=BUY`);
+    const sellResponse = await fetch(`${CLOB_API}/price?token_id=${tokenId}&side=SELL`);
 
-    if (!bidResponse.ok || !askResponse.ok) {
-      throw new Error(`CLOB API error: ${bidResponse.status || askResponse.status}`);
+    if (!buyResponse.ok || !sellResponse.ok) {
+      throw new Error(`CLOB API error: ${buyResponse.status || sellResponse.status}`);
     }
 
-    const bidData = await bidResponse.json();
-    const askData = await askResponse.json();
+    const buyData = await buyResponse.json();
+    const sellData = await sellResponse.json();
 
-    const bestBid = parseFloat(bidData.price);
-    const bestAsk = parseFloat(askData.price);
+    const bestBid = parseFloat(buyData.price);
+    const bestAsk = parseFloat(sellData.price);
     const spread = bestAsk - bestBid;
     const midPrice = (bestBid + bestAsk) / 2;
     const spreadPercentage = midPrice > 0 ? (spread / midPrice) * 100 : 0;
@@ -236,16 +239,19 @@ app.post('/api/orderbooks', async (req, res) => {
         // Fetch prices for all tokens using the /price endpoint
         for (const token of market.tokens) {
           try {
-            // Fetch best bid (price when selling)
-            const bidResponse = await fetch(`${CLOB_API}/price?token_id=${token.token_id}&side=SELL`);
-            const askResponse = await fetch(`${CLOB_API}/price?token_id=${token.token_id}&side=BUY`);
+            // Fetch best bid and ask prices
+            // Note: Polymarket API semantics:
+            // - side=BUY returns the best bid (price buyers are willing to pay)
+            // - side=SELL returns the best ask (price sellers are asking for)
+            const buyResponse = await fetch(`${CLOB_API}/price?token_id=${token.token_id}&side=BUY`);
+            const sellResponse = await fetch(`${CLOB_API}/price?token_id=${token.token_id}&side=SELL`);
 
-            if (bidResponse.ok && askResponse.ok) {
-              const bidData = await bidResponse.json();
-              const askData = await askResponse.json();
+            if (buyResponse.ok && sellResponse.ok) {
+              const buyData = await buyResponse.json();
+              const sellData = await sellResponse.json();
 
-              const bestBid = parseFloat(bidData.price);
-              const bestAsk = parseFloat(askData.price);
+              const bestBid = parseFloat(buyData.price);
+              const bestAsk = parseFloat(sellData.price);
               const spread = bestAsk - bestBid;
               const midPrice = (bestBid + bestAsk) / 2;
               const spreadPercentage = midPrice > 0 ? (spread / midPrice) * 100 : 0;
