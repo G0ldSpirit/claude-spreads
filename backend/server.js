@@ -180,17 +180,18 @@ app.get('/api/orderbook/:tokenId', async (req, res) => {
   try {
     const { tokenId } = req.params;
 
-    // Fetch best bid and ask using /price endpoint
-    // Note: Polymarket API semantics:
-    // - side=BUY returns the best bid (price buyers are willing to pay)
-    // - side=SELL returns the best ask (price sellers are asking for)
+    // Fetch full orderbook from /book endpoint
+    const bookResponse = await fetch(`${CLOB_API}/book?token_id=${tokenId}`);
+
+    // Fetch accurate best bid/ask from /price endpoint
     const buyResponse = await fetch(`${CLOB_API}/price?token_id=${tokenId}&side=BUY`);
     const sellResponse = await fetch(`${CLOB_API}/price?token_id=${tokenId}&side=SELL`);
 
-    if (!buyResponse.ok || !sellResponse.ok) {
-      throw new Error(`CLOB API error: ${buyResponse.status || sellResponse.status}`);
+    if (!bookResponse.ok || !buyResponse.ok || !sellResponse.ok) {
+      throw new Error(`CLOB API error: ${bookResponse.status || buyResponse.status || sellResponse.status}`);
     }
 
+    const orderbook = await bookResponse.json();
     const buyData = await buyResponse.json();
     const sellData = await sellResponse.json();
 
@@ -201,8 +202,7 @@ app.get('/api/orderbook/:tokenId', async (req, res) => {
     const spreadPercentage = midPrice > 0 ? (spread / midPrice) * 100 : 0;
 
     res.json({
-      bids: [{ price: bestBid.toString(), size: "0" }],
-      asks: [{ price: bestAsk.toString(), size: "0" }],
+      ...orderbook,
       spreadMetrics: {
         bestBid: parseFloat(bestBid.toFixed(4)),
         bestAsk: parseFloat(bestAsk.toFixed(4)),
@@ -236,17 +236,18 @@ app.post('/api/orderbooks', async (req, res) => {
           continue;
         }
 
-        // Fetch prices for all tokens using the /price endpoint
+        // Fetch orderbooks and prices for all tokens
         for (const token of market.tokens) {
           try {
-            // Fetch best bid and ask prices
-            // Note: Polymarket API semantics:
-            // - side=BUY returns the best bid (price buyers are willing to pay)
-            // - side=SELL returns the best ask (price sellers are asking for)
+            // Fetch full orderbook from /book endpoint
+            const bookResponse = await fetch(`${CLOB_API}/book?token_id=${token.token_id}`);
+
+            // Fetch accurate prices from /price endpoint
             const buyResponse = await fetch(`${CLOB_API}/price?token_id=${token.token_id}&side=BUY`);
             const sellResponse = await fetch(`${CLOB_API}/price?token_id=${token.token_id}&side=SELL`);
 
-            if (buyResponse.ok && sellResponse.ok) {
+            if (bookResponse.ok && buyResponse.ok && sellResponse.ok) {
+              const orderbook = await bookResponse.json();
               const buyData = await buyResponse.json();
               const sellData = await sellResponse.json();
 
@@ -259,8 +260,7 @@ app.post('/api/orderbooks', async (req, res) => {
               console.log(`Token ${token.outcome} - Bid: ${bestBid}, Ask: ${bestAsk}, Spread: ${spread.toFixed(4)}`);
 
               allOrderbooks[token.token_id] = {
-                bids: [{ price: bestBid.toString(), size: "0" }],
-                asks: [{ price: bestAsk.toString(), size: "0" }],
+                ...orderbook,
                 spreadMetrics: {
                   bestBid: parseFloat(bestBid.toFixed(4)),
                   bestAsk: parseFloat(bestAsk.toFixed(4)),
@@ -273,7 +273,7 @@ app.post('/api/orderbooks', async (req, res) => {
             // Small delay between token requests
             await delay(100);
           } catch (error) {
-            console.error(`Error fetching prices for token ${token.token_id}:`, error);
+            console.error(`Error fetching orderbook for token ${token.token_id}:`, error);
           }
         }
 
